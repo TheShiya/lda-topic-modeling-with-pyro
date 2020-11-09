@@ -18,7 +18,8 @@ class LDACAVI(object):
         Attributes
         ----------
         phi: multinomial parameters. For each word, there is a multinomial
-        distribution that control the probability of this word appearing in the document.
+        distribution that control the probability of this word appearing
+        in the document.
 
         gamma: Dirichlet parameters. gamma controls the probability
         of the distribution of the topics.
@@ -45,8 +46,8 @@ class LDACAVI(object):
         gamma_diff_norm = 1
         phi_diff_norm = 1
         while num_step <= self.max_step and (gamma_diff_norm + phi_diff_norm) >= self.tol:
-            old_gamma = self.gamma
-            old_phi = self.phi
+            old_gamma = self.gamma.clone().detach()
+            old_phi = self.phi.clone().detach()
             for word_ind in range(len(document)):
                 cur_word = document[word_ind]
                 word_corpora_ind = np.where(self.corpora == cur_word)[0]
@@ -80,4 +81,5 @@ if __name__ == "__main__":
     for i in range(len(words)):
         document += [corpora[i]] * int(words[i])
     obj = LDACAVI(alpha=alpha, beta=beta, corpora=corpora, num_topics=num_topics)
-    obj.doc_cavi(np.array(document))
+    gamma, phi = obj.doc_cavi(np.array(document))
+    print(gamma, phi)

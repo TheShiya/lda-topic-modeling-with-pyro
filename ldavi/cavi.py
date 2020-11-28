@@ -4,7 +4,7 @@ import pyro.distributions as dist
 import pyro
 from functools import lru_cache
 from typing import List, Union
-from Numerical.LDALinearRN import lda_linear_newton
+from numerical.lda_linear_newton import lda_linear_newton
 
 
 class LDACAVI(object):
@@ -17,13 +17,11 @@ class LDACAVI(object):
         beta: (num_topics, len(corpora))
         corpora: the unique vocabularies with a give order.
         num_topics
-
         Attributes
         ----------
         phi: multinomial parameters. For each word, there is a multinomial
         distribution that control the probability of this word appearing
         in the document.
-
         gamma: Dirichlet parameters. gamma controls the probability
         of the distribution of the topics.
         """
@@ -162,36 +160,36 @@ class LDACAVI(object):
 
 
 if __name__ == "__main__":
-    corpora_ = ["a", "b", "c", "d", "e", "f"]
-    num_topics_ = 2
-    alpha = torch.tensor(data=[20., 5])
-    beta = torch.tensor(data=[[0.2, 0.2, 0.2, 0.2, 0.2],
-                              [0.2, 0.2, 0.2, 0.2, 0.2]])
-    topic = dist.DirichletMultinomial(alpha)()
-    beta_p = torch.matmul(topic, beta)
-    words = torch.distributions.multinomial.Multinomial(total_count=20,
-                                                        probs=beta_p).sample()
-    # A document with 20 words
-    document_ = []
-    for i in range(len(words)):
-        document_ += [corpora_[i]] * int(words[i])
-    obj = LDACAVI(alpha=torch.tensor(data=[5., 20.]),
-                  beta=beta, corpora=corpora_, num_topics=num_topics_,
-                  num_particles=10)
-    gamma, phi = obj.cavi(document_, show_step=2)
-    # import pandas as pd
-    # # DATA_PATH = r"F:\PSun-dev\Python\mlpp_project\data\order_data.csv"
-    # DATA_PATH = r"F:\PSun-data\MLPPdata\order_products__train.csv"
-    # VOCAB_PATH = r"F:\PSun-data\MLPPdata\products.csv"
-    # data = pd.read_csv(DATA_PATH)[["order_id", "product_id"]]
-    # data = data.groupby("order_id")
-    # data = data.apply(lambda x: x["product_id"].to_list()).to_list()[:20]
-    # vocab = pd.read_csv(VOCAB_PATH)["product_id"].to_list()
-    # # data = pd.read_csv(DATA_PATH).values
-    # # vocab = list(np.unique(data.reshape(-1, 1)))
-    # alpha = torch.tensor(data=[50., 50, 50, 50, 50])
-    # beta = torch.rand(size=(len(alpha), len(vocab)))
-    # beta = beta / beta.sum(-1).view(-1, 1)
-    # obj = LDACAVI(alpha=alpha, beta=beta,
-    #               corpora=vocab, num_topics=5, num_particles=10)
-    # alpha, beta = obj.estimate_params(data)
+    # corpora_ = ["a", "b", "c", "d", "e", "f"]
+    # num_topics_ = 2
+    # alpha = torch.tensor(data=[20., 5])
+    # beta = torch.tensor(data=[[0.2, 0.2, 0.2, 0.2, 0.2],
+    #                           [0.2, 0.2, 0.2, 0.2, 0.2]])
+    # topic = dist.DirichletMultinomial(alpha)()
+    # beta_p = torch.matmul(topic, beta)
+    # words = torch.distributions.multinomial.Multinomial(total_count=20,
+    #                                                     probs=beta_p).sample()
+    # # A document with 20 words
+    # document_ = []
+    # for i in range(len(words)):
+    #     document_ += [corpora_[i]] * int(words[i])
+    # obj = LDACAVI(alpha=torch.tensor(data=[5., 20.]),
+    #               beta=beta, corpora=corpora_, num_topics=num_topics_,
+    #               num_particles=10)
+    # gamma, phi = obj.cavi(document_, show_step=2)
+    import pandas as pd
+    # DATA_PATH = r"F:\PSun-dev\Python\mlpp_project\data\order_data.csv"
+    DATA_PATH = r"F:\PSun-data\MLPPdata\order_products__train.csv"
+    VOCAB_PATH = r"F:\PSun-data\MLPPdata\products.csv"
+    data = pd.read_csv(DATA_PATH)[["order_id", "product_id"]]
+    data = data.groupby("order_id")
+    data = data.apply(lambda x: x["product_id"].to_list()).to_list()[:20]
+    vocab = pd.read_csv(VOCAB_PATH)["product_id"].to_list()
+    # data = pd.read_csv(DATA_PATH).values
+    # vocab = list(np.unique(data.reshape(-1, 1)))
+    alpha = torch.tensor(data=[50., 50, 50, 50, 50])
+    beta = torch.rand(size=(len(alpha), len(vocab)))
+    beta = beta / beta.sum(-1).view(-1, 1)
+    obj = LDACAVI(alpha=alpha, beta=beta,
+                  corpora=vocab, num_topics=5, num_particles=10)
+    alpha, beta = obj.estimate_params(data)

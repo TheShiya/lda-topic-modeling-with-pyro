@@ -1,3 +1,9 @@
+"""
+Implemented Adam method to update Alpha in EM algorithm.
+"""
+
+__all__ = ["lglh", "lda_linear_newton"]
+
 import torch
 
 
@@ -41,11 +47,3 @@ def lda_linear_newton(alpha: torch.Tensor, gamma,
         alpha_tol = torch.norm(step)
         iter_num += 1
     return alpha
-
-
-if __name__ == "__main__":
-    _alpha = torch.tensor([10., 20., 30.], requires_grad=True)
-    _gamma = torch.tensor([[2., 2., 2.], [1., 2., 3.],
-                           [1., 2., 3.], [1., 2., 3.]])
-    a = lda_linear_newton(_alpha, _gamma)
-    print("alpha", a)

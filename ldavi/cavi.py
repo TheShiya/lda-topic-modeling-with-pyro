@@ -1,10 +1,16 @@
-import numpy as np
-import torch
-import pyro.distributions as dist
-import pyro
+"""
+Implemented LDA with CAVI algorithm.
+"""
+
 from functools import lru_cache
 from typing import List, Union
-from numerical.lda_linear_newton import lda_linear_newton
+
+import numpy as np
+import pyro
+import pyro.distributions as dist
+import torch
+
+from numerical.lda_alpha_gradient_descent import lda_linear_newton
 
 
 class LDACAVI(object):
@@ -16,14 +22,13 @@ class LDACAVI(object):
         alpha: (num_topics)
         beta: (num_topics, len(corpora))
         corpora: the unique vocabularies with a give order.
-        num_topics
-        Attributes
+        num_topics: the hyperparameter in LDA model.
+        num_particles: the number of particles used in estimating expection.
+            (like ELBO or other MC integrals)
+
+        References
         ----------
-        phi: multinomial parameters. For each word, there is a multinomial
-        distribution that control the probability of this word appearing
-        in the document.
-        gamma: Dirichlet parameters. gamma controls the probability
-        of the distribution of the topics.
+        Latent Dirichlet Allocation
         """
         self.alpha = alpha
         self.beta = beta
@@ -34,6 +39,8 @@ class LDACAVI(object):
         self.corpora = corpora
         self.trace_elbo = []
         self.num_particles = num_particles
+        if num_topics != alpha.shape[0]:
+            raise ValueError("Mismatched size of alpha and num_topics.")
 
     @lru_cache(maxsize=None)
     def encoding_doc(self, document: tuple) -> torch.Tensor:
@@ -82,6 +89,17 @@ class LDACAVI(object):
         self.trace_elbo = []
 
     def guide(self, order: np.ndarray):
+        """
+        Document/ Order level guide.
+
+        Parameters
+        ----------
+        order: Document/ Order.
+
+        Returns
+        -------
+        Latent variables theta and z.
+        """
         with pyro.plate("theta_", 1):
             theta = pyro.sample("theta", dist.Dirichlet(self.gamma))
         with pyro.plate("product_", len(order)) as ind:
@@ -89,6 +107,17 @@ class LDACAVI(object):
         return theta, z
 
     def model(self, order: np.array):
+        """
+        Document/ Order level model.
+
+        Parameters
+        ----------
+        order: Document/ Order (works as the observation of the model).
+
+        Returns
+        -------
+        Latent variables theta and z.
+        """
         with pyro.plate("theta_", 1):
             theta = pyro.sample("theta", dist.Dirichlet(self.alpha))
         with pyro.plate("product_", len(order)):
@@ -98,6 +127,17 @@ class LDACAVI(object):
         return theta, z, w
 
     def calc_elbo(self, order: torch.Tensor) -> float:
+        """
+        Calculate ELBO given guide and model.
+
+        Parameters
+        ----------
+        order: observations
+
+        Returns
+        -------
+        The evidence of lower bound.
+        """
         elbo = torch.tensor(0.0)
         for _ in range(self.num_particles):
             guide_trace = pyro.poutine.trace(self.guide).get_trace(order)
@@ -108,7 +148,18 @@ class LDACAVI(object):
 
         return -elbo.detach().numpy() / self.num_particles
 
-    def gen_w_matrix(self, documents: np.ndarray) -> [torch.Tensor]:
+    def gen_w_matrix(self, documents: np.ndarray) -> List[torch.Tensor]:
+        """
+        Generate the one-hot encoding format for words. Will be used in EM algo
+
+        Parameters
+        ----------
+        documents
+
+        Returns
+        -------
+
+        """
         array = [torch.nn.functional.one_hot(self.encoding_doc(tuple(doc))
                                              .to(torch.int64),
                                              num_classes=len(self.corpora))
@@ -157,39 +208,3 @@ class LDACAVI(object):
                 print(f"Step {_iter} | beta diff norm={beta_diff_norm} |"
                       f" alpha diff norm={alpha_diff_norm} | ELBO={elbo}")
         return self.alpha, self.beta
-
-
-if __name__ == "__main__":
-    # corpora_ = ["a", "b", "c", "d", "e", "f"]
-    # num_topics_ = 2
-    # alpha = torch.tensor(data=[20., 5])
-    # beta = torch.tensor(data=[[0.2, 0.2, 0.2, 0.2, 0.2],
-    #                           [0.2, 0.2, 0.2, 0.2, 0.2]])
-    # topic = dist.DirichletMultinomial(alpha)()
-    # beta_p = torch.matmul(topic, beta)
-    # words = torch.distributions.multinomial.Multinomial(total_count=20,
-    #                                                     probs=beta_p).sample()
-    # # A document with 20 words
-    # document_ = []
-    # for i in range(len(words)):
-    #     document_ += [corpora_[i]] * int(words[i])
-    # obj = LDACAVI(alpha=torch.tensor(data=[5., 20.]),
-    #               beta=beta, corpora=corpora_, num_topics=num_topics_,
-    #               num_particles=10)
-    # gamma, phi = obj.cavi(document_, show_step=2)
-    import pandas as pd
-    # DATA_PATH = r"F:\PSun-dev\Python\mlpp_project\data\order_data.csv"
-    DATA_PATH = r"F:\PSun-data\MLPPdata\order_products__train.csv"
-    VOCAB_PATH = r"F:\PSun-data\MLPPdata\products.csv"
-    data = pd.read_csv(DATA_PATH)[["order_id", "product_id"]]
-    data = data.groupby("order_id")
-    data = data.apply(lambda x: x["product_id"].to_list()).to_list()[:20]
-    vocab = pd.read_csv(VOCAB_PATH)["product_id"].to_list()
-    # data = pd.read_csv(DATA_PATH).values
-    # vocab = list(np.unique(data.reshape(-1, 1)))
-    alpha = torch.tensor(data=[50., 50, 50, 50, 50])
-    beta = torch.rand(size=(len(alpha), len(vocab)))
-    beta = beta / beta.sum(-1).view(-1, 1)
-    obj = LDACAVI(alpha=alpha, beta=beta,
-                  corpora=vocab, num_topics=5, num_particles=10)
-    alpha, beta = obj.estimate_params(data)

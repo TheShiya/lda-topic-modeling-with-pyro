@@ -1,5 +1,11 @@
-import pandas as pd
+__all__ = ["stopwords", "load_process"]
+
 import os
+
+import pandas as pd
+from nltk.corpus import stopwords
+
+stopwords = set(stopwords.words('english'))
 
 ORDER_PATH = os.path.join("data", "order_products__train.csv")
 PRODUCT_PATH = os.path.join("data", "product_name.csv")
@@ -21,4 +27,4 @@ def load_process(order_path=ORDER_PATH, product_path=PRODUCT_PATH):
 
     data = o.groupby("order_id")["shortname"].apply(list)
     data = data[(data.apply(len) >= 10) & (data.apply(len) <= 50)]
-    return data
+    return o, data

@@ -1,7 +1,7 @@
 import pyro
 import torch
 import pyro.distributions as dist
-from torch.distributions.constraints import positive
+from torch.distributions.constraints import positive, greater_than
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 
@@ -21,21 +21,39 @@ class LDABBVI(object):
         self.optimizer_params = optimizer_params
 
     def model(self, data):
-        alpha = torch.randint(1, 10, (self.n_topics,)).double()
-        beta = torch.ones(self.n_topics, self.vocab_size)
+
+        with pyro.plate("topics", self.n_topics):
+            alpha = pyro.sample("alpha", dist.Gamma(1. / self.n_topics, 1.))
+            beta_param = torch.ones(self.vocab_size) / self.vocab_size
+            betas = pyro.sample("beta", dist.Dirichlet(beta_param))
+
         words = []
         for d in pyro.plate("doc_loop", self.n_docs):
             doc = data[d]
             theta = pyro.sample(f"theta_{d}", dist.Dirichlet(alpha))
-            nwords = len(data[d])
-            for w in pyro.plate(f"word_loop_{d}", nwords):
+            n_words = len(data[d])
+            for w in pyro.plate(f"word_loop_{d}", n_words):
                 z = pyro.sample(f"z{d}_{w}", dist.Categorical(theta))
-                w = pyro.sample(f"w{d}_{w}", dist.Categorical(beta[z]),
+                w = pyro.sample(f"w{d}_{w}", dist.Categorical(betas[z]),
                                 obs=doc[w])
                 words.append(w)
         return words
 
     def guide(self, data):
+
+        alpha_posterior = pyro.param(
+            "topic_weights_posterior",
+            lambda: torch.ones(self.n_topics),
+            constraint=positive)
+        beta_posterior = pyro.param(
+            "topic_words_posterior",
+            lambda: torch.ones(self.n_topics, self.vocab_size),
+            constraint=greater_than(0.5))
+
+        with pyro.plate("topics", self.n_topics):
+            alpha = pyro.sample("alpha", dist.Gamma(alpha_posterior, 1.))
+            betas = pyro.sample("beta", dist.Dirichlet(beta_posterior))
+
         for d in pyro.plate("doc_loop", self.n_docs):
             gamma_q = pyro.param(
                 f"gamma_{d}", torch.ones(self.n_topics), constraint=positive

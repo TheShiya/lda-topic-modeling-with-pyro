@@ -1,9 +1,8 @@
 import pandas as pd
-
+import os
 
 ORDER_PATH = os.path.join("data", "order_products__train.csv")
 PRODUCT_PATH = os.path.join("data", "product_name.csv")
-
 
 def load_process(order_path=ORDER_PATH, product_path=PRODUCT_PATH):
     o = pd.read_csv(order_path).dropna()

@@ -153,12 +153,18 @@ class LDACAVI(object):
                 pyro.poutine.replay(self.model,
                                     trace=guide_trace)).get_trace(order)
             elbo += model_trace.log_prob_sum() - guide_trace.log_prob_sum()
-        return -elbo.detach().numpy() / self.num_particles
+        return elbo.detach().numpy() / self.num_particles
 
     def calc_log_prob(self, order: torch.Tensor):
-        model_trace = pyro.poutine.trace(self.model).get_trace(order)
-        model_trace.log_prob_sum()
-        return model_trace.log_prob_sum()
+        prob_w = torch.tensor(data=0., dtype=torch.float64)
+        for _ in range(self.num_particles):
+            model_trace = pyro.poutine.trace(self.model).get_trace(order)
+            model_trace.log_prob_sum()
+            prob_w_tmp = model_trace.nodes["products"]["log_prob_sum"]
+            prob_w_tmp = torch.tensor(prob_w_tmp.detach(),
+                                      dtype=torch.float64).exp()
+            prob_w += prob_w_tmp
+        return torch.log(prob_w)
 
     def gen_w_matrix(self, documents: np.ndarray) -> List[torch.Tensor]:
         """
@@ -241,7 +247,7 @@ class LDACAVI(object):
                                                      prob=round(float(prob),
                                                                 3)))
 
-                if len(self.trace_validate_prob) >= 0:
+                if len(self.trace_validate_prob) > 0:
                     valid_prob = self.trace_validate_prob[-1]
                     print("Step {_iter} | beta diff norm={beta_diff_norm} |"
                           " alpha diff norm={alpha_diff_norm} | ELBO={elb} "

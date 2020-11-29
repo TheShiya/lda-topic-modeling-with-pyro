@@ -1,11 +1,11 @@
-__all__ = ["stopwords", "load_process"]
+__all__ = ["stopwords", "load_process", "STOPWORDS", "DATA_PATH"]
 
 import os
 
 import pandas as pd
 from nltk.corpus import stopwords
 
-stopwords = set(stopwords.words('english'))
+STOPWORDS = {'of', 'in', 'the', 'with'}
 
 FILE_DIR = os.path.dirname(__file__)
 DATA_PATH = os.path.join(FILE_DIR, "data")
@@ -20,7 +20,7 @@ def load_process(order_path: str = ORDER_PATH,
     p = p.rename(columns={"product_name": "name"})
     p["name"] = p["name"].str.replace("[^a-zA-Z0-9 ]", "").str.lower()
     p["name"] = p["name"].apply(
-        lambda s: " ".join([w for w in s.split() if w not in stopwords])
+        lambda s: " ".join([w for w in s.split() if w not in STOPWORDS])
     )
     p["shortname"] = p["name"].str.split().str[-2:].apply(" ".join)
     id2short = dict(zip(p["product_id"], p["shortname"]))

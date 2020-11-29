@@ -1,5 +1,7 @@
 import pandas as pd
+import numpy as np
 import os
+import pyro
 from nltk.corpus import stopwords
 
 stopwords = set(stopwords.words('english'))
@@ -25,3 +27,15 @@ def load_process(order_path=ORDER_PATH, product_path=PRODUCT_PATH):
     data = o.groupby("order_id")["shortname"].apply(list)
     data = data[(data.apply(len) >= 10) & (data.apply(len) <= 50)]
     return o, data
+
+
+def mc(q, func, n_trials=200, n_samples=100):
+    eval_means = []
+    for _ in range(n_trials):
+        evals = []
+        for i in range(n_samples):
+            x_i = pyro.sample('x_{}'.format(i), q)
+            evals.append(func(x_i).numpy())
+        eval_means.append(np.mean(evals, axis=0))
+    eval_means = np.array(eval_means)
+    return eval_means

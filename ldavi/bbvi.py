@@ -66,7 +66,7 @@ class LDABBVI(object):
                     constraint=positive
                 )
                 z = pyro.sample(f"z{d}_{w}", dist.Categorical(phi_q))
-        return theta, z
+        return theta, z, alpha, betas
 
     def generate(self, alpha_prior, beta_prior):
         data = torch.zeros([self.n_words, self.n_docs])

@@ -68,7 +68,7 @@ class LDABBVI(object):
                     constraint=positive
                 )
                 z = pyro.sample(f"z{d}_{w}", dist.Categorical(phi_q))
-        return alpha, betas, theta, z
+        return theta, z, alpha, betas
 
     def run_svi(self, n_steps=100, num_particles=1, clear_params=False):
         if not clear_params:

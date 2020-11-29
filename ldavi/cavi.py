@@ -25,7 +25,7 @@ class LDACAVI(object):
         num_topics: the hyperparameter in LDA model.
         num_particles: the number of particles used in estimating expection.
             (like ELBO or other MC integrals)
-            
+
         References
         ----------
         Latent Dirichlet Allocation
@@ -39,6 +39,10 @@ class LDACAVI(object):
         self.corpora = corpora
         self.trace_elbo = []
         self.num_particles = num_particles
+        self.__init_alpha = alpha
+        self.__inti_beta = beta
+        self.trace_log_prob = []
+        self.trace_validate_prob = []
         if num_topics != alpha.shape[0]:
             raise ValueError("Mismatched size of alpha and num_topics.")
 
@@ -86,7 +90,11 @@ class LDACAVI(object):
     def reset_graph(self):
         self.gamma = None
         self.phi = None
+        self.alpha = self.__init_alpha
+        self.beta = self.__inti_beta
         self.trace_elbo = []
+        self.trace_log_prob = []
+        self.trace_validate_prob = []
 
     def guide(self, order: np.ndarray):
         """
@@ -145,8 +153,12 @@ class LDACAVI(object):
                 pyro.poutine.replay(self.model,
                                     trace=guide_trace)).get_trace(order)
             elbo += model_trace.log_prob_sum() - guide_trace.log_prob_sum()
-
         return -elbo.detach().numpy() / self.num_particles
+
+    def calc_log_prob(self, order: torch.Tensor):
+        model_trace = pyro.poutine.trace(self.model).get_trace(order)
+        model_trace.log_prob_sum()
+        return model_trace.log_prob_sum()
 
     def gen_w_matrix(self, documents: np.ndarray) -> List[torch.Tensor]:
         """
@@ -169,14 +181,16 @@ class LDACAVI(object):
     def _estimate_params_e(self, documents: np.ndarray):
         gamma_list = []
         phi_list = []
-        sum_elbo = 0
+        sum_elbo = 0.
+        sum_log_prob = 0.
         for doc in documents:
             doc_gamma, doc_phi = self.cavi(doc, keep_elbo=False)
             gamma_list.append(doc_gamma.detach().numpy())
             phi_list.append(doc_phi.detach())
             _doc = self.encoding_doc(tuple(doc))
             sum_elbo += self.calc_elbo(_doc)
-        return sum_elbo, torch.tensor(data=gamma_list), phi_list
+            sum_log_prob += self.calc_log_prob(_doc)
+        return sum_elbo, sum_log_prob, torch.tensor(data=gamma_list), phi_list
 
     def _estimate_params_m(self, phi_list: List[torch.Tensor],
                            gamma_list: torch.Tensor,
@@ -191,20 +205,61 @@ class LDACAVI(object):
         self.beta = beta_unscale / beta_unscale.sum(-1).view(-1, 1)
         self.alpha = lda_linear_newton(self.alpha, gamma=gamma_list)
 
-    def estimate_params(self, documents: np.array, tol: float = 5e-3,
+    def estimate_params(self, documents: np.array,
+                        validate_data: np.array = None, tol: float = 5e-4,
                         max_iter: int = 500, show_step=1):
         w_list = self.gen_w_matrix(documents)
         beta_diff_norm, alpha_diff_norm, _iter = 1, 1, 0
         while beta_diff_norm + alpha_diff_norm > tol and _iter <= max_iter:
             old_alpha = self.alpha.detach()
             old_beta = self.beta.detach()
-            elbo, gamma_list, phi_list = self._estimate_params_e(documents)
+            elb, prob, gamma_list, phi_list = self._estimate_params_e(
+                documents)
             self._estimate_params_m(phi_list, gamma_list, w_list)
             beta_diff_norm = torch.norm(self.beta - old_beta)
             alpha_diff_norm = torch.norm(self.alpha - old_alpha)
             _iter += 1
-            self.trace_elbo.append(elbo)
+            self.trace_elbo.append(elb)
+            self.trace_log_prob.append(prob)
+
+            if validate_data is not None:
+                valid_prob = self._validate(validate_data)
+                self.trace_validate_prob.append(valid_prob)
+
             if _iter % show_step == 0:
-                print(f"Step {_iter} | beta diff norm={beta_diff_norm} |"
-                      f" alpha diff norm={alpha_diff_norm} | ELBO={elbo}")
+                if len(self.trace_validate_prob) == 0:
+                    print("Step {_iter} | beta diff norm={beta_diff_norm} |"
+                          " alpha diff norm={alpha_diff_norm} | ELBO={elb} "
+                          "| Log_prob={prob}".format(_iter=_iter,
+                                                     beta_diff_norm=round(
+                                                         float(beta_diff_norm),
+                                                         4),
+                                                     alpha_diff_norm=round(
+                                                         float(alpha_diff_norm
+                                                               ), 4),
+                                                     elb=round(float(elb), 3),
+                                                     prob=round(float(prob),
+                                                                3)))
+
+                if len(self.trace_validate_prob) >= 0:
+                    valid_prob = self.trace_validate_prob[-1]
+                    print("Step {_iter} | beta diff norm={beta_diff_norm} |"
+                          " alpha diff norm={alpha_diff_norm} | ELBO={elb} "
+                          "| Log_prob={prob} | Validate_prob={valid_prob}"
+                          .format(_iter=_iter,
+                                  beta_diff_norm=round(float(beta_diff_norm),
+                                                       4),
+                                  alpha_diff_norm=round(float(alpha_diff_norm),
+                                                        4),
+                                  elb=round(float(elb), 3),
+                                  prob=round(float(prob), 3),
+                                  valid_prob=round(float(valid_prob), 3)))
+
         return self.alpha, self.beta
+
+    def _validate(self, validate_data: np.array):
+        prob = 0.
+        for doc in validate_data:
+            prob += self.calc_log_prob(
+                self.encoding_doc(tuple(doc)))
+        return prob

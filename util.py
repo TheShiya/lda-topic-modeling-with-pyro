@@ -7,8 +7,10 @@ from nltk.corpus import stopwords
 
 stopwords = set(stopwords.words('english'))
 
-ORDER_PATH = os.path.join(r"..\data", "order_products__train.csv")
-PRODUCT_PATH = os.path.join(r"..\data", "products.csv")
+FILE_DIR = os.path.dirname(__file__)
+DATA_PATH = os.path.join(FILE_DIR, "data")
+ORDER_PATH = os.path.join(DATA_PATH, "order_products__train.csv")
+PRODUCT_PATH = os.path.join(DATA_PATH, "products.csv")
 
 
 def load_process(order_path: str = ORDER_PATH,

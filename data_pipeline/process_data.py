@@ -7,11 +7,12 @@ from nltk.corpus import stopwords
 
 stopwords = set(stopwords.words('english'))
 
-ORDER_PATH = os.path.join("data", "order_products__train.csv")
-PRODUCT_PATH = os.path.join("data", "product_name.csv")
+ORDER_PATH = os.path.join(r"..\data", "order_products__train.csv")
+PRODUCT_PATH = os.path.join(r"..\data", "products.csv")
 
 
-def load_process(order_path=ORDER_PATH, product_path=PRODUCT_PATH):
+def load_process(order_path: str = ORDER_PATH,
+                 product_path: str = PRODUCT_PATH):
     o = pd.read_csv(order_path).dropna()
     p = pd.read_csv(product_path).dropna()
     p = p.rename(columns={"product_name": "name"})
@@ -27,4 +28,4 @@ def load_process(order_path=ORDER_PATH, product_path=PRODUCT_PATH):
 
     data = o.groupby("order_id")["shortname"].apply(list)
     data = data[(data.apply(len) >= 10) & (data.apply(len) <= 50)]
-    return o, data
+    return o, data, o["shortname"].unique()

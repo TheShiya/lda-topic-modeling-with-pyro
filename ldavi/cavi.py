@@ -25,7 +25,7 @@ class LDACAVI(object):
         num_topics: the hyperparameter in LDA model.
         num_particles: the number of particles used in estimating expection.
             (like ELBO or other MC integrals)
-
+            
         References
         ----------
         Latent Dirichlet Allocation

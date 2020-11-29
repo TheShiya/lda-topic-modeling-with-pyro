@@ -1,14 +1,13 @@
 import pyro
-import torch
 import pyro.distributions as dist
-from torch.distributions.constraints import positive, greater_than
+import torch
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
+from torch.distributions.constraints import positive, greater_than
 
 
 class LDABBVI(object):
-
-    def __init__(self, data, optimizer, n_topics=5, optimizer_params={}):
+    def __init__(self, data, optimizer, n_topics=5, optimizer_params=None):
         enum = enumerate(set("|".join(data.apply("|".join)).split("|")))
         name2id = {v: i for i, v in enum}
         data = data.apply(lambda x: torch.FloatTensor([name2id[n] for n in x]))
@@ -53,6 +52,9 @@ class LDABBVI(object):
         with pyro.plate("topics", self.n_topics):
             alpha = pyro.sample("alpha", dist.Gamma(alpha_posterior, 1.))
             betas = pyro.sample("beta", dist.Dirichlet(beta_posterior))
+
+        theta = None
+        z = None
 
         for d in pyro.plate("doc_loop", self.n_docs):
             gamma_q = pyro.param(

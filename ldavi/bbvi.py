@@ -68,19 +68,6 @@ class LDABBVI(object):
                 z = pyro.sample(f"z{d}_{w}", dist.Categorical(phi_q))
         return theta, z, alpha, betas
 
-    def generate(self, alpha_prior, beta_prior):
-        data = torch.zeros([self.n_words, self.n_docs])
-        topics = beta_prior
-        for d in pyro.plate("doc_loop", self.n_docs):
-            theta = pyro.sample(f"theta_{d}", dist.Dirichlet(alpha_prior))
-            for w in pyro.iarange("word_loop", self.n_words):
-                z = pyro.sample(f"z{d}_{w}",
-                                dist.Categorical(theta))
-                word = pyro.sample(f"w{d}_{w}",
-                                   dist.Categorical(topics[z.item()]))
-                data[w, d] = word
-        return data, topics
-
     def run_svi(self, n_steps=100, num_particles=1, clear_params=False):
         if not clear_params:
             pyro.clear_param_store()

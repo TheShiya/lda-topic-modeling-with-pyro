@@ -1,13 +1,16 @@
 import pyro
 import pyro.distributions as dist
 import torch
+import pandas as pd
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 from torch.distributions.constraints import positive, greater_than
 
 
 class LDABBVI(object):
-    def __init__(self, data, optimizer, n_topics=5, optimizer_params=None):
+
+    def __init__(self, data, optimizer, n_topics=5):
+        data = pd.Series(data)
         enum = enumerate(set("|".join(data.apply("|".join)).split("|")))
         name2id = {v: i for i, v in enum}
         data = data.apply(lambda x: torch.FloatTensor([name2id[n] for n in x]))
@@ -17,7 +20,6 @@ class LDABBVI(object):
         self.n_docs = len(data)
         self.data = data.values
         self.optimizer = optimizer
-        self.optimizer_params = optimizer_params
 
     def model(self, data):
 
@@ -70,17 +72,18 @@ class LDABBVI(object):
                 z = pyro.sample(f"z{d}_{w}", dist.Categorical(phi_q))
         return theta, z, alpha, betas
 
-    def run_svi(self, n_steps=100, num_particles=1, clear_params=False):
+    def run_svi(self, n_steps=100, num_particles=1, opt_params=None,
+                clear_params=True, verbose=False):
         if not clear_params:
             pyro.clear_param_store()
-        opt = ClippedAdam(self.optimizer_params)
+        opt = ClippedAdam(opt_params)
         svi = SVI(self.model, self.guide, opt,
                   loss=Trace_ELBO(num_particles=num_particles))
         loss = []
         for step in range(n_steps):
             curr_loss = svi.step(self.data)
             loss.append(curr_loss)
-            if step % (n_steps // 20) == 0:
+            if verbose and step % (n_steps // 20) == 0:
                 message = '{:.0%} ({:.1f})'.format(step / n_steps, curr_loss)
                 print(message, end=' | ')
         return loss

@@ -26,10 +26,8 @@ jobs:
           run: pip install -r requirements.txt
       
       -name: Lint test with flake8
-      - uses: PSun/flake8-check-action@v1.0.0
+      - uses: Peimou/flake8-check-action@v1.0.0
         with:
-          select: E3,E4,E5,E7,W6,F,B,G0
-          maxlinelength: 127
           repotoken: ${{secrets.GITHUB_TOKEN }}
 
       - name: Test with pytest

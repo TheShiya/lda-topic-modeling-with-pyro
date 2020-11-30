@@ -161,7 +161,7 @@ class LDACAVI(object):
             model_trace = pyro.poutine.trace(self.model).get_trace(order)
             model_trace.log_prob_sum()
             prob_w_tmp = model_trace.nodes["products"]["log_prob_sum"]
-            prob_w_tmp = torch.tensor(prob_w_tmp.detach(),
+            prob_w_tmp = torch.tensor(float(prob_w_tmp),
                                       dtype=torch.float64).exp()
             prob_w += prob_w_tmp
         return torch.log(prob_w)

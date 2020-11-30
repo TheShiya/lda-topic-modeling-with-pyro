@@ -1,5 +1,7 @@
 import pyro
 import pyro.distributions as dist
+from functools import lru_cache
+import numpy as np
 import torch
 import pandas as pd
 from pyro.infer import SVI, Trace_ELBO
@@ -8,28 +10,29 @@ from torch.distributions.constraints import positive, greater_than
 
 
 class LDABBVI(object):
-
-    def __init__(self, data, optimizer, n_topics=5):
-        data = pd.Series(data)
-        enum = enumerate(set("|".join(data.apply("|".join)).split("|")))
-        name2id = {v: i for i, v in enum}
-        data = data.apply(lambda x: torch.FloatTensor([name2id[n] for n in x]))
-
-        self.vocab_size = len(name2id)
+    def __init__(self, data: np.ndarray, corpora: list,
+                 valid_data: np.ndarray, optimizer, n_topics=5,
+                 optimizer_params=None):
+        self.corpora = corpora
+        self.data = [self.encoding_doc(tuple(doc)) for doc in data]
+        self.valid_data = [self.encoding_doc(tuple(doc)) for doc in valid_data]
+        self.vocab_size = len(corpora)
         self.n_topics = n_topics
-        self.n_docs = len(data)
-        self.data = data.values
         self.optimizer = optimizer
 
-    def model(self, data):
+    @lru_cache(maxsize=None)
+    def encoding_doc(self, document: tuple) -> torch.Tensor:
+        return torch.tensor(np.array([self.corpora.index(order)
+                                      for order in document]))
 
+    def model(self, data):
         with pyro.plate("topics", self.n_topics):
             alpha = pyro.sample("alpha", dist.Gamma(1. / self.n_topics, 1.))
             beta_param = torch.ones(self.vocab_size) / self.vocab_size
             betas = pyro.sample("beta", dist.Dirichlet(beta_param))
 
         words = []
-        for d in pyro.plate("doc_loop", self.n_docs):
+        for d in pyro.plate("doc_loop", len(data)):
             doc = data[d]
             theta = pyro.sample(f"theta_{d}", dist.Dirichlet(alpha))
             n_words = len(data[d])
@@ -41,7 +44,6 @@ class LDABBVI(object):
         return words
 
     def guide(self, data):
-
         alpha_posterior = pyro.param(
             "topic_weights_posterior",
             lambda: torch.ones(self.n_topics),
@@ -58,7 +60,7 @@ class LDABBVI(object):
         theta = None
         z = None
 
-        for d in pyro.plate("doc_loop", self.n_docs):
+        for d in pyro.plate("doc_loop", len(data)):
             gamma_q = pyro.param(
                 f"gamma_{d}", torch.ones(self.n_topics), constraint=positive
             )
@@ -72,18 +74,39 @@ class LDABBVI(object):
                 z = pyro.sample(f"z{d}_{w}", dist.Categorical(phi_q))
         return theta, z, alpha, betas
 
-    def run_svi(self, n_steps=100, num_particles=1, opt_params=None,
-                clear_params=True, verbose=False):
+    def calc_log_sum(self, data, num_particles):
+        prob_w = torch.tensor(data=0., dtype=torch.float64)
+        for _ in range(num_particles):
+            model_trace = pyro.poutine.trace(self.model).get_trace(data)
+            model_trace.log_prob_sum()
+            prob_w_tmp = torch.tensor(data=0.)
+            for key in model_trace.nodes:
+                if key[0] == "w":
+                    prob_w_tmp += model_trace.nodes[key]["log_prob_sum"]
+            prob_w_tmp = torch.tensor(float(prob_w_tmp),
+                                      dtype=torch.float64)
+            prob_w += prob_w_tmp
+        return prob_w
+
+    def run_svi(self, n_steps=100,
+                num_particles=10, clear_params=False):
         if not clear_params:
             pyro.clear_param_store()
         opt = ClippedAdam(opt_params)
         svi = SVI(self.model, self.guide, opt,
                   loss=Trace_ELBO(num_particles=num_particles))
         loss = []
+        pred_prob = []
+        valid_prob = []
         for step in range(n_steps):
             curr_loss = svi.step(self.data)
+            prob = self.calc_log_sum(self.data, num_particles)
+            valid_p = self.calc_log_sum(self.valid_data, num_particles)
             loss.append(curr_loss)
-            if verbose and step % (n_steps // 20) == 0:
-                message = '{:.0%} ({:.1f})'.format(step / n_steps, curr_loss)
+            pred_prob.append(prob)
+            valid_prob.append(valid_p)
+            if step % (n_steps // 20) == 0:
+                message = '{:.0%} ({:.1f}) ({:.1f}) ({:.1f})'.format(
+                    step / n_steps, curr_loss, prob, valid_p)
                 print(message, end=' | ')
-        return loss
+        return loss, pred_prob, valid_prob

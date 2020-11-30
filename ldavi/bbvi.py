@@ -3,6 +3,7 @@ import pyro.distributions as dist
 from functools import lru_cache
 import numpy as np
 import torch
+import pandas as pd
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 from torch.distributions.constraints import positive, greater_than
@@ -18,7 +19,6 @@ class LDABBVI(object):
         self.vocab_size = len(corpora)
         self.n_topics = n_topics
         self.optimizer = optimizer
-        self.optimizer_params = optimizer_params
 
     @lru_cache(maxsize=None)
     def encoding_doc(self, document: tuple) -> torch.Tensor:
@@ -72,7 +72,7 @@ class LDABBVI(object):
                     constraint=positive
                 )
                 z = pyro.sample(f"z{d}_{w}", dist.Categorical(phi_q))
-        return alpha, betas, theta, z
+        return theta, z, alpha, betas
 
     def calc_log_sum(self, data, num_particles):
         prob_w = torch.tensor(data=0., dtype=torch.float64)
@@ -92,7 +92,7 @@ class LDABBVI(object):
                 num_particles=10, clear_params=False):
         if not clear_params:
             pyro.clear_param_store()
-        opt = ClippedAdam(self.optimizer_params)
+        opt = ClippedAdam(opt_params)
         svi = SVI(self.model, self.guide, opt,
                   loss=Trace_ELBO(num_particles=num_particles))
         loss = []

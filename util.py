@@ -1,10 +1,13 @@
-__all__ = ["stopwords", "load_process", "STOPWORDS", "DATA_PATH"]
+__all__ = ["STOPWORDS", "load_process", "STOPWORDS", "DATA_PATH",
+           "run_mc_experiment"]
 
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from nltk.corpus import stopwords
+import pyro
+import torch
 
 STOPWORDS = {"of", "in", "the", "with", "oz", "liter", "count", "stem",
              "calorie", "a", "aa", "an", "ct", "gallon", "bag", "inch",
@@ -46,3 +49,34 @@ def load_process(order_path: str = ORDER_PATH,
         vocab += order
     vocab = np.unique(vocab)
     return o, sub_data, vocab
+
+
+def mc(q, func, n_trials=200, n_samples=100):
+    eval_means = []
+    for _ in range(n_trials):
+        evals = []
+        for i in range(n_samples):
+            x_i = pyro.sample('x_{}'.format(i), q)
+            evals.append(func(x_i).numpy())
+        eval_means.append(np.mean(evals, axis=0))
+    eval_means = np.array(eval_means)
+    return eval_means
+
+
+def run_mc_experiment(dimensions, funcs, q, func_names: list = None,
+                      n_trials=50, n_samples=100,):
+    sds = []
+    print('finished:', end=' ')
+    for dimension in dimensions:
+        print(dimension, end=' ')
+        for func in funcs:
+            param = torch.tensor(abs(np.random.randn(dimension)))
+            param /= param.sum()
+            means = mc(q(param), func, n_trials=n_trials, n_samples=n_samples)
+            sd = (means.std(0) / (means.mean(0) + 1e-15)).mean()
+            sds.append(sd)
+    plt.plot(dimensions, np.array(sds).reshape(-1, len(funcs)))
+    plt.title('Mean coefficient of variation (sd/mean) across dimensions')
+    plt.xlabel('Dimension')
+    if func_names is not None:
+        plt.legend(func_names)

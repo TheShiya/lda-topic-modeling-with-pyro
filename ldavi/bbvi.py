@@ -3,7 +3,6 @@ import pyro.distributions as dist
 from functools import lru_cache
 import numpy as np
 import torch
-import pandas as pd
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import ClippedAdam
 from torch.distributions.constraints import positive, greater_than
@@ -11,14 +10,15 @@ from torch.distributions.constraints import positive, greater_than
 
 class LDABBVI(object):
     def __init__(self, data: np.ndarray, corpora: list,
-                 valid_data: np.ndarray, optimizer, n_topics=5,
-                 optimizer_params=None):
+                 valid_data: np.ndarray, optimizer,
+                 optimizer_params, n_topics=5):
         self.corpora = corpora
         self.data = [self.encoding_doc(tuple(doc)) for doc in data]
         self.valid_data = [self.encoding_doc(tuple(doc)) for doc in valid_data]
         self.vocab_size = len(corpora)
         self.n_topics = n_topics
         self.optimizer = optimizer
+        self.optimizer_params = optimizer_params
 
     @lru_cache(maxsize=None)
     def encoding_doc(self, document: tuple) -> torch.Tensor:
@@ -92,7 +92,7 @@ class LDABBVI(object):
                 num_particles=10, clear_params=False):
         if not clear_params:
             pyro.clear_param_store()
-        opt = ClippedAdam(opt_params)
+        opt = ClippedAdam(self.optimizer_params)
         svi = SVI(self.model, self.guide, opt,
                   loss=Trace_ELBO(num_particles=num_particles))
         loss = []

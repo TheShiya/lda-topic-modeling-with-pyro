@@ -4,6 +4,7 @@ __all__ = ["STOPWORDS", "load_process", "STOPWORDS", "DATA_PATH",
 import os
 
 import matplotlib.pyplot as plt
+from ldavi.cavi import LDACAVI
 import numpy as np
 import pandas as pd
 import pyro
@@ -80,3 +81,40 @@ def run_mc_experiment(dimensions, funcs, q, func_names: list = None,
     plt.xlabel('Dimension')
     if func_names is not None:
         plt.legend(func_names)
+
+
+def cavi_topic_criticism(corpora: list, train_data, valid_data,
+                         topic_list: list, max_iter=500):
+    for num_topics in topic_list:
+        print(f"running num_topics={num_topics}")
+        alpha = torch.rand(size=(num_topics,)) * 10
+        beta = torch.rand(size=(len(alpha), len(corpora)))
+        beta /= beta.sum(-1).view(-1, 1)
+
+        cavi_obj = LDACAVI(alpha, beta,
+                           corpora, num_topics,
+                           num_particles=1)
+
+        cavi_obj.reset_graph()
+
+        # Parameter estimation
+        _, _ = cavi_obj.estimate_params(
+            train_data, valid_data, tol=2e-3,
+            show_step=np.nan, max_iter=max_iter)
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+        fig.suptitle(f'Num of topic: {num_topics}')
+        ax1.plot(np.linspace(1, len(cavi_obj.trace_elbo),
+                             len(cavi_obj.trace_elbo)),
+                 cavi_obj.trace_elbo)
+        ax1.set_title("EBLO")
+        ax1.grid()
+        ax2.plot(np.linspace(1, len(cavi_obj.trace_log_prob),
+                             len(cavi_obj.trace_log_prob)),
+                 cavi_obj.trace_log_prob)
+        ax2.set_title("Log Predictive Prob")
+        ax2.grid()
+        ax3.plot(np.linspace(1, len(cavi_obj.trace_validate_prob),
+                             len(cavi_obj.trace_validate_prob)),
+                 cavi_obj.trace_validate_prob)
+        ax3.grid()
+        ax3.set_title("Log Validate Prob")

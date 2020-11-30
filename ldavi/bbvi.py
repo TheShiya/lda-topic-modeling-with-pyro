@@ -77,7 +77,11 @@ class LDABBVI(object):
     def calc_log_sum(self, data, num_particles):
         prob_w = torch.tensor(data=0., dtype=torch.float64)
         for _ in range(num_particles):
-            model_trace = pyro.poutine.trace(self.model).get_trace(data)
+            guide_trace = pyro.poutine.trace(self.guide).get_trace(data)
+            # sample latent variables from guide_trace
+            model_trace = pyro.poutine.trace(
+                pyro.poutine.replay(self.model,
+                                    trace=guide_trace)).get_trace(data)
             model_trace.log_prob_sum()
             prob_w_tmp = torch.tensor(data=0.)
             for key in model_trace.nodes:

@@ -49,17 +49,17 @@ def mc(q, func, n_trials=200, n_samples=100):
     return eval_means
 
 
-def run_mc_experiments(dimensions, funcs, q, n_trials=50, n_samples=100):
-    stds = []
+def run_mc_experiment(dimensions, funcs, q, n_trials=50, n_samples=100):
+    sds = []
+    print('finished: ')
     for dimension in dimensions:
-        print('dim={}'.format(dimension), end=' ')
+        print(dimension, end=' ')
         for func in funcs:
             param = torch.FloatTensor(abs(np.random.randn(dimension)))
             param /= param.sum()
             means = mc(q(param), func, n_trials=n_trials, n_samples=n_samples)
-            std_adj = (means.std(0) / (means.mean(0) + 1e-15)).mean()
-            stds.append(std_adj)
-
-    plt.plot(dimensions, np.array(stds).reshape(-1, len(funcs)))
-    plt.title('Average coefficient of variation (sd/mean) across dimensions')
+            sd = (means.std(0) / (means.mean(0) + 1e-15)).mean()
+            sds.append(sd)
+    plt.plot(dimensions, np.array(sds).reshape(-1, len(funcs)))
+    plt.title('Mean coefficient of variation (sd/mean) across dimensions')
     plt.xlabel('Dimension')

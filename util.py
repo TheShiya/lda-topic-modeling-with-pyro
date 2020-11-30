@@ -51,7 +51,7 @@ def mc(q, func, n_trials=200, n_samples=100):
 
 def run_mc_experiment(dimensions, funcs, q, n_trials=50, n_samples=100):
     sds = []
-    print('finished: ')
+    print('finished:', end=' ')
     for dimension in dimensions:
         print(dimension, end=' ')
         for func in funcs:

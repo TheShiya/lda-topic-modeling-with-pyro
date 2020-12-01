@@ -45,11 +45,11 @@ class LDABBVI(object):
 
     def guide(self, data):
         alpha_posterior = pyro.param(
-            "topic_weights_posterior",
+            "alpha_posterior",
             lambda: torch.ones(self.n_topics),
             constraint=positive)
         beta_posterior = pyro.param(
-            "topic_words_posterior",
+            "beta_posterior",
             lambda: torch.ones(self.n_topics, self.vocab_size),
             constraint=greater_than(0.5))
 
